@@ -1,0 +1,6 @@
+{
+  "name": "LA2EETOH",
+  "description": "Bilingual Egyptian lost-and-found platform with interactive Google Maps across all 27 governorates, AI visual search, smart QR tags, recovery tracking, and verified institutional intake.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

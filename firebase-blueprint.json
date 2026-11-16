@@ -1,0 +1,491 @@
+{
+  "entities": {
+    "UserPrivate": {
+      "title": "UserPrivate",
+      "description": "Private user account PII and preferences, readable only by owner and admins.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "phone": { "type": "string", "maxLength": 32 },
+        "phoneVerified": { "type": "boolean" },
+        "phoneVerifiedAt": { "type": "string", "format": "date-time" },
+        "address": { "type": "string", "maxLength": 240 },
+        "preferredLang": { "type": "string", "enum": ["en", "ar"] },
+        "preferredTheme": { "type": "string", "enum": ["light", "dark"] },
+        "notifyInApp": { "type": "boolean" },
+        "notifyEmail": { "type": "boolean" },
+        "notifyPush": { "type": "boolean" },
+        "role": { "type": "string", "enum": ["user", "moderator", "org_staff", "admin"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "preferredLang", "preferredTheme", "role", "createdAt", "updatedAt"]
+    },
+    "UserPublic": {
+      "title": "UserPublic",
+      "description": "Public non-PII user display profile and reputation summary.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "photoUrl": { "type": "string", "maxLength": 250000 },
+        "reputationScore": { "type": "number" },
+        "successfulReturns": { "type": "integer" },
+        "validReports": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "displayName", "reputationScore", "successfulReturns", "validReports", "createdAt", "updatedAt"]
+    },
+    "AdminMarker": {
+      "title": "AdminMarker",
+      "description": "Trusted server/admin-provisioned supervisor and admin role lookup document.",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "role": { "type": "string", "enum": ["admin", "moderator"] },
+        "appointedByEmail": { "type": "string", "maxLength": 200 },
+        "inviteId": { "type": "string", "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["uid", "email", "createdAt"]
+    },
+    "SupervisorInvite": {
+      "title": "SupervisorInvite",
+      "description": "Admin-created supervisor appointment by email allowing verified users to activate supervisor access on sign-in.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "email": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "emailLower": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "role": { "type": "string", "enum": ["admin", "moderator"] },
+        "active": { "type": "boolean" },
+        "appointedByUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "appointedByEmail": { "type": "string", "minLength": 3, "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "email", "emailLower", "role", "active", "appointedByUid", "appointedByEmail", "createdAt", "updatedAt"]
+    },
+    "ItemReport": {
+      "title": "ItemReport",
+      "description": "Sanitized public lost or found item report without sensitive PII or unmasked exact private addresses.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "type": { "type": "string", "enum": ["lost", "found"] },
+        "status": { "type": "string", "enum": ["open", "matched", "recovered", "closed", "flagged"] },
+        "visibility": { "type": "string", "enum": ["public", "restricted", "hidden"] },
+        "title": { "type": "string", "minLength": 3, "maxLength": 120 },
+        "description": { "type": "string", "minLength": 10, "maxLength": 2000 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "color": { "type": "string", "minLength": 2, "maxLength": 32 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "governorateId": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "cityId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "districtId": { "type": "string", "maxLength": 64 },
+        "areaNote": { "type": "string", "maxLength": 160 },
+        "publicLat": { "type": "number" },
+        "publicLng": { "type": "number" },
+        "locationPrivacy": { "type": "string", "enum": ["exact", "approximate"] },
+        "dateOccurred": { "type": "string", "minLength": 10, "maxLength": 10, "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+        "timeApprox": { "type": "string", "maxLength": 32 },
+        "isSensitiveDocument": { "type": "boolean" },
+        "documentKind": { "type": "string", "maxLength": 64 },
+        "organizationId": { "type": "string", "maxLength": 128 },
+        "photoUrls": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": [
+        "id",
+        "ownerId",
+        "ownerDisplayName",
+        "type",
+        "status",
+        "visibility",
+        "title",
+        "description",
+        "category",
+        "color",
+        "governorateId",
+        "cityId",
+        "publicLat",
+        "publicLng",
+        "locationPrivacy",
+        "dateOccurred",
+        "isSensitiveDocument",
+        "photoUrls",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "ReportPrivateDetail": {
+      "title": "ReportPrivateDetail",
+      "description": "Private exact coordinates and verification clues accessible only to report owner and admins.",
+      "type": "object",
+      "properties": {
+        "reportId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "exactLat": { "type": "number" },
+        "exactLng": { "type": "number" },
+        "verificationQuestion": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["reportId", "ownerId", "exactLat", "exactLng", "createdAt", "updatedAt"]
+    },
+    "SmartTag": {
+      "title": "SmartTag",
+      "description": "Smart QR tag with random token and privacy-safe relay.",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "minLength": 8, "maxLength": 64, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "itemLabel": { "type": "string", "minLength": 2, "maxLength": 80 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "safeNote": { "type": "string", "maxLength": 300 },
+        "status": { "type": "string", "enum": ["active", "lost", "found", "returned", "deactivated"] },
+        "scanCount": { "type": "integer" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["token", "ownerId", "itemLabel", "category", "status", "scanCount", "createdAt", "updatedAt"]
+    },
+    "TagScanRelay": {
+      "title": "TagScanRelay",
+      "description": "Protected finder-to-owner relay message submitted after scanning a Smart QR Tag.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "tagToken": { "type": "string", "minLength": 8, "maxLength": 64, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "finderMessage": { "type": "string", "minLength": 5, "maxLength": 500 },
+        "finderSafeContact": { "type": "string", "maxLength": 120 },
+        "governorateId": { "type": "string", "maxLength": 40 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "tagToken", "ownerId", "finderMessage", "createdAt"]
+    },
+    "WatchlistRule": {
+      "title": "WatchlistRule",
+      "description": "User-owned smart watchlist alert configuration.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "title": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "keywords": { "type": "string", "maxLength": 200 },
+        "category": { "type": "string", "maxLength": 40 },
+        "color": { "type": "string", "maxLength": 32 },
+        "brand": { "type": "string", "maxLength": 80 },
+        "governorateId": { "type": "string", "maxLength": 40 },
+        "maxDistanceKm": { "type": "number" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "title", "active", "createdAt", "updatedAt"]
+    },
+    "RecoveryCase": {
+      "title": "RecoveryCase",
+      "description": "Recovery lifecycle tracker with stage progression and verification workflow.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "reportId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "reportTitle": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "counterpartyId": { "type": "string", "maxLength": 128 },
+        "counterpartyDisplayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "stage": {
+          "type": "string",
+          "enum": [
+            "report_published",
+            "possible_match_found",
+            "contact_initiated",
+            "ownership_verification",
+            "handover_arranged",
+            "item_returned",
+            "case_closed",
+            "disputed",
+            "cancelled"
+          ]
+        },
+        "verificationNote": { "type": "string", "maxLength": 500 },
+        "handoverLocation": { "type": "string", "maxLength": 160 },
+        "lastMessageText": { "type": "string", "maxLength": 240 },
+        "lastMessageAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "reportId", "reportTitle", "ownerId", "stage", "createdAt", "updatedAt"]
+    },
+    "CaseChatMessage": {
+      "title": "CaseChatMessage",
+      "description": "Real-time two-party recovery chat message restricted strictly to verified case participants and admins.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "caseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "senderId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "senderName": { "type": "string", "minLength": 1, "maxLength": 80 },
+        "body": { "type": "string", "minLength": 1, "maxLength": 1500 },
+        "kind": { "type": "string", "enum": ["text", "handover_proposal", "verification_prompt"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "caseId", "senderId", "senderName", "body", "kind", "createdAt"]
+    },
+    "Organization": {
+      "title": "Organization",
+      "description": "Verified or pending Egyptian institution (university, metro, mall, airport).",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "nameEn": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "nameAr": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "orgType": { "type": "string", "enum": ["university", "school", "mall", "metro", "train", "airport", "transport", "institution"] },
+        "governorateId": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "cityId": { "type": "string", "minLength": 2, "maxLength": 64 },
+        "verificationStatus": { "type": "string", "enum": ["pending", "verified", "suspended"] },
+        "applicantUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "contactDesk": { "type": "string", "maxLength": 160 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "nameEn", "nameAr", "orgType", "governorateId", "cityId", "verificationStatus", "applicantUid", "createdAt", "updatedAt"]
+    },
+    "InstitutionalRecord": {
+      "title": "InstitutionalRecord",
+      "description": "Organization intake and handover record with custody tracking.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "organizationId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "staffUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "itemName": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "category": { "type": "string", "minLength": 2, "maxLength": 40 },
+        "storageLocation": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "status": { "type": "string", "enum": ["in_custody", "verification_pending", "handed_over", "disposed"] },
+        "handoverRef": { "type": "string", "maxLength": 120 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "organizationId", "staffUid", "itemName", "category", "storageLocation", "status", "createdAt", "updatedAt"]
+    },
+    "SupportTicket": {
+      "title": "SupportTicket",
+      "description": "User support ticket with status and priority.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ownerId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "subject": { "type": "string", "minLength": 4, "maxLength": 150 },
+        "category": { "type": "string", "enum": ["account", "recovery", "abuse_report", "organization", "technical", "privacy"] },
+        "priority": { "type": "string", "enum": ["low", "medium", "high", "urgent"] },
+        "status": { "type": "string", "enum": ["open", "in_progress", "resolved", "closed"] },
+        "initialMessage": { "type": "string", "minLength": 10, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ownerId", "subject", "category", "priority", "status", "initialMessage", "createdAt", "updatedAt"]
+    },
+    "SupportMessage": {
+      "title": "SupportMessage",
+      "description": "User-visible reply inside a support ticket.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "ticketId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "authorId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "authorRole": { "type": "string", "enum": ["user", "support_agent", "admin"] },
+        "body": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "ticketId", "authorId", "authorRole", "body", "createdAt"]
+    },
+    "SupportInternalNote": {
+      "title": "SupportInternalNote",
+      "description": "Private staff-only note isolated from end-user ticket views.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "staffUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "note": { "type": "string", "minLength": 1, "maxLength": 2000 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "staffUid", "note", "createdAt"]
+    },
+    "ModerationCase": {
+      "title": "ModerationCase",
+      "description": "Suspicious listing or abuse flag queued for admin moderation.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "reportId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "reporterUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "reason": { "type": "string", "minLength": 4, "maxLength": 400 },
+        "status": { "type": "string", "enum": ["pending", "reviewed", "dismissed", "action_taken"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "reportId", "reporterUid", "reason", "status", "createdAt", "updatedAt"]
+    },
+    "NotificationItem": {
+      "title": "NotificationItem",
+      "description": "Sanitized in-app notification for matches, watchlists, recovery updates, or support.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "userId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "kind": { "type": "string", "enum": ["match", "watchlist", "recovery", "support", "qr_scan", "org"] },
+        "titleEn": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "titleAr": { "type": "string", "minLength": 2, "maxLength": 120 },
+        "bodyEn": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "bodyAr": { "type": "string", "minLength": 2, "maxLength": 300 },
+        "read": { "type": "boolean" },
+        "linkPath": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "userId", "kind", "titleEn", "titleAr", "bodyEn", "bodyAr", "read", "createdAt"]
+    },
+    "UserReview": {
+      "title": "UserReview",
+      "description": "Post-recovery reputation review tied to a confirmed recovery case.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "caseId": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "reviewerUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "targetUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "rating": { "type": "integer" },
+        "comment": { "type": "string", "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "caseId", "reviewerUid", "targetUid", "rating", "createdAt"]
+    },
+    "PlatformSettings": {
+      "title": "PlatformSettings",
+      "description": "Admin-configurable platform settings including ad placements, maintenance mode, and report limits.",
+      "type": "object",
+      "properties": {
+        "platformName": { "type": "string", "minLength": 2, "maxLength": 60 },
+        "maintenanceMode": { "type": "boolean" },
+        "adsEnabled": { "type": "boolean" },
+        "adSlotsHome": { "type": "boolean" },
+        "adSlotsSearch": { "type": "boolean" },
+        "adSlotsSidebar": { "type": "boolean" },
+        "adSlotsInfo": { "type": "boolean" },
+        "maxReportsPerDay": { "type": "integer" },
+        "autoModerationStrict": { "type": "boolean" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["platformName", "maintenanceMode", "adsEnabled", "maxReportsPerDay", "updatedAt"]
+    },
+    "AdminAuditLog": {
+      "title": "AdminAuditLog",
+      "description": "Immutable admin action audit record.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "adminUid": { "type": "string", "minLength": 1, "maxLength": 128, "pattern": "^[a-zA-Z0-9_-]+$" },
+        "action": { "type": "string", "minLength": 2, "maxLength": 100 },
+        "targetPath": { "type": "string", "minLength": 2, "maxLength": 200 },
+        "summary": { "type": "string", "minLength": 2, "maxLength": 400 },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "adminUid", "action", "targetPath", "summary", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserPrivate" },
+      "description": "Private user PII and settings strictly readable/writable by owner or admin."
+    },
+    "/usersPublic/{userId}": {
+      "schema": { "$ref": "#/entities/UserPublic" },
+      "description": "Public non-PII user display profile and reputation metrics."
+    },
+    "/admins/{userId}": {
+      "schema": { "$ref": "#/entities/AdminMarker" },
+      "description": "Trusted admin & supervisor lookup collection."
+    },
+    "/supervisorInvites/{inviteId}": {
+      "schema": { "$ref": "#/entities/SupervisorInvite" },
+      "description": "Admin-managed supervisor email invitations."
+    },
+    "/reports/{reportId}": {
+      "schema": { "$ref": "#/entities/ItemReport" },
+      "description": "Sanitized lost and found reports across Egypt."
+    },
+    "/reports/{reportId}/private/{detailId}": {
+      "schema": { "$ref": "#/entities/ReportPrivateDetail" },
+      "description": "Private exact coordinates and verification clues."
+    },
+    "/smartTags/{token}": {
+      "schema": { "$ref": "#/entities/SmartTag" },
+      "description": "Smart QR tag registry keyed by random token."
+    },
+    "/tagScans/{scanId}": {
+      "schema": { "$ref": "#/entities/TagScanRelay" },
+      "description": "Protected finder relay messages from QR scans."
+    },
+    "/watchlists/{watchlistId}": {
+      "schema": { "$ref": "#/entities/WatchlistRule" },
+      "description": "User smart watchlist alert rules."
+    },
+    "/recoveryCases/{caseId}": {
+      "schema": { "$ref": "#/entities/RecoveryCase" },
+      "description": "Recovery lifecycle tracking cases."
+    },
+    "/recoveryCases/{caseId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/CaseChatMessage" },
+      "description": "Protected real-time two-party recovery chat messages between owner and finder/claimant."
+    },
+    "/organizations/{orgId}": {
+      "schema": { "$ref": "#/entities/Organization" },
+      "description": "Egyptian institutional partners and pending applications."
+    },
+    "/institutionalRecords/{recordId}": {
+      "schema": { "$ref": "#/entities/InstitutionalRecord" },
+      "description": "Institutional intake and handover custody records."
+    },
+    "/supportTickets/{ticketId}": {
+      "schema": { "$ref": "#/entities/SupportTicket" },
+      "description": "Support center tickets."
+    },
+    "/supportTickets/{ticketId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/SupportMessage" },
+      "description": "User-visible replies on a support ticket."
+    },
+    "/supportTickets/{ticketId}/internalNotes/{noteId}": {
+      "schema": { "$ref": "#/entities/SupportInternalNote" },
+      "description": "Admin/support-staff private internal notes."
+    },
+    "/moderationCases/{caseId}": {
+      "schema": { "$ref": "#/entities/ModerationCase" },
+      "description": "Abuse and suspicious listing moderation queue."
+    },
+    "/notifications/{notificationId}": {
+      "schema": { "$ref": "#/entities/NotificationItem" },
+      "description": "User notifications."
+    },
+    "/userReviews/{reviewId}": {
+      "schema": { "$ref": "#/entities/UserReview" },
+      "description": "Post-recovery reputation reviews."
+    },
+    "/platformSettings/{settingId}": {
+      "schema": { "$ref": "#/entities/PlatformSettings" },
+      "description": "Global platform configuration."
+    },
+    "/adminAuditLogs/{logId}": {
+      "schema": { "$ref": "#/entities/AdminAuditLog" },
+      "description": "Immutable admin audit log entries."
+    }
+  }
+}

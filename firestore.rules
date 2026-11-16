@@ -1,0 +1,916 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 1. Global Safety Net (Default-Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 2. Hardened Global Helpers
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isOwner(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser()
+        && ('email' in request.auth.token)
+        && request.auth.token.email is string
+        && request.auth.token.email.lower() == 'ashraf.shappan3388@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (isVerifiedUser() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)));
+    }
+
+    function isSeedReportId(id) {
+      return id in ['seed-backpack-nasr', 'seed-keys-dokki', 'seed-sunglasses-smouha', 'seed-wallet-zamalek'];
+    }
+
+    function isSeedOrgId(id) {
+      return id in ['org-cairo-metro-3', 'org-cairo-university', 'org-alex-rail', 'org-cairo-airport-t3'];
+    }
+
+    // 3. Entity Validation Blueprints
+    function isValidUserPrivate(data) {
+      return data.keys().hasAll(['uid', 'email', 'preferredLang', 'preferredTheme', 'role', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'uid', 'email', 'phone', 'phoneVerified', 'phoneVerifiedAt', 'address',
+          'preferredLang', 'preferredTheme', 'notifyInApp', 'notifyEmail', 'notifyPush',
+          'role', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && (!('phone' in data) || (data.phone is string && data.phone.size() <= 32))
+        && (!('phoneVerified' in data) || data.phoneVerified is bool)
+        && (!('phoneVerifiedAt' in data) || data.phoneVerifiedAt is timestamp)
+        && (!('address' in data) || (data.address is string && data.address.size() <= 240))
+        && data.preferredLang in ['en', 'ar']
+        && data.preferredTheme in ['light', 'dark']
+        && (!('notifyInApp' in data) || data.notifyInApp is bool)
+        && (!('notifyEmail' in data) || data.notifyEmail is bool)
+        && (!('notifyPush' in data) || data.notifyPush is bool)
+        && data.role in ['user', 'moderator', 'org_staff', 'admin']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidUserPublic(data) {
+      return data.keys().hasAll(['uid', 'displayName', 'reputationScore', 'successfulReturns', 'validReports', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['uid', 'displayName', 'photoUrl', 'reputationScore', 'successfulReturns', 'validReports', 'createdAt', 'updatedAt'])
+        && isValidId(data.uid)
+        && data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80
+        && (!('photoUrl' in data) || (data.photoUrl is string && data.photoUrl.size() <= 250000))
+        && data.reputationScore is number && data.reputationScore >= 0 && data.reputationScore <= 5
+        && data.successfulReturns is int && data.successfulReturns >= 0
+        && data.validReports is int && data.validReports >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminMarker(data) {
+      return data.keys().hasAll(['uid', 'email', 'createdAt'])
+        && data.keys().hasOnly(['uid', 'email', 'role', 'appointedByEmail', 'inviteId', 'createdAt'])
+        && isValidId(data.uid)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && (!('role' in data) || data.role in ['admin', 'moderator'])
+        && (!('appointedByEmail' in data) || (data.appointedByEmail is string && data.appointedByEmail.size() <= 200))
+        && (!('inviteId' in data) || isValidId(data.inviteId))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSupervisorInvite(data) {
+      return data.keys().hasAll(['id', 'email', 'emailLower', 'role', 'active', 'appointedByUid', 'appointedByEmail', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'email', 'emailLower', 'role', 'active', 'appointedByUid', 'appointedByEmail', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.email is string && data.email.size() >= 3 && data.email.size() <= 200
+        && data.emailLower is string && data.emailLower.size() >= 3 && data.emailLower.size() <= 200
+        && data.role in ['admin', 'moderator']
+        && data.active is bool
+        && isValidId(data.appointedByUid)
+        && data.appointedByEmail is string && data.appointedByEmail.size() >= 3 && data.appointedByEmail.size() <= 200
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidItemReport(data) {
+      return data.keys().hasAll([
+          'id', 'ownerId', 'ownerDisplayName', 'type', 'status', 'visibility',
+          'title', 'description', 'category', 'color', 'governorateId', 'cityId',
+          'publicLat', 'publicLng', 'locationPrivacy', 'dateOccurred',
+          'isSensitiveDocument', 'photoUrls', 'createdAt', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'ownerId', 'ownerDisplayName', 'type', 'status', 'visibility',
+          'title', 'description', 'category', 'color', 'brand', 'governorateId',
+          'cityId', 'districtId', 'areaNote', 'publicLat', 'publicLng',
+          'locationPrivacy', 'dateOccurred', 'timeApprox', 'isSensitiveDocument',
+          'documentKind', 'organizationId', 'photoUrls', 'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.ownerDisplayName is string && data.ownerDisplayName.size() >= 1 && data.ownerDisplayName.size() <= 80
+        && data.type in ['lost', 'found']
+        && data.status in ['open', 'matched', 'recovered', 'closed', 'flagged']
+        && data.visibility in ['public', 'restricted', 'hidden']
+        && data.title is string && data.title.size() >= 3 && data.title.size() <= 120
+        && data.description is string && data.description.size() >= 10 && data.description.size() <= 2000
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 40
+        && data.color is string && data.color.size() >= 2 && data.color.size() <= 32
+        && (!('brand' in data) || (data.brand is string && data.brand.size() <= 80))
+        && data.governorateId is string && data.governorateId.size() >= 2 && data.governorateId.size() <= 40
+        && data.cityId is string && data.cityId.size() >= 2 && data.cityId.size() <= 64
+        && (!('districtId' in data) || (data.districtId is string && data.districtId.size() <= 64))
+        && (!('areaNote' in data) || (data.areaNote is string && data.areaNote.size() <= 160))
+        && data.publicLat is number && data.publicLat >= 21 && data.publicLat <= 32.5
+        && data.publicLng is number && data.publicLng >= 24 && data.publicLng <= 37.5
+        && data.locationPrivacy in ['exact', 'approximate']
+        && data.dateOccurred is string && data.dateOccurred.size() == 10 && data.dateOccurred.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+        && (!('timeApprox' in data) || (data.timeApprox is string && data.timeApprox.size() <= 32))
+        && data.isSensitiveDocument is bool
+        && (!('documentKind' in data) || (data.documentKind is string && data.documentKind.size() <= 64))
+        && (!('organizationId' in data) || (data.organizationId is string && data.organizationId.size() <= 128))
+        && data.photoUrls is list && data.photoUrls.size() <= 5
+        && (data.photoUrls.size() == 0 || (data.photoUrls[0] is string && data.photoUrls[0].size() <= 300000))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidReportPrivateDetail(data) {
+      return data.keys().hasAll(['reportId', 'ownerId', 'exactLat', 'exactLng', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['reportId', 'ownerId', 'exactLat', 'exactLng', 'verificationQuestion', 'createdAt', 'updatedAt'])
+        && isValidId(data.reportId)
+        && isValidId(data.ownerId)
+        && data.exactLat is number && data.exactLat >= 21 && data.exactLat <= 32.5
+        && data.exactLng is number && data.exactLng >= 24 && data.exactLng <= 37.5
+        && (!('verificationQuestion' in data) || (data.verificationQuestion is string && data.verificationQuestion.size() <= 200))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSmartTag(data) {
+      return data.keys().hasAll(['token', 'ownerId', 'itemLabel', 'category', 'status', 'scanCount', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['token', 'ownerId', 'itemLabel', 'category', 'safeNote', 'status', 'scanCount', 'createdAt', 'updatedAt'])
+        && isValidId(data.token)
+        && data.token.size() >= 8 && data.token.size() <= 64
+        && isValidId(data.ownerId)
+        && data.itemLabel is string && data.itemLabel.size() >= 2 && data.itemLabel.size() <= 80
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 40
+        && (!('safeNote' in data) || (data.safeNote is string && data.safeNote.size() <= 300))
+        && data.status in ['active', 'lost', 'found', 'returned', 'deactivated']
+        && data.scanCount is int && data.scanCount >= 0
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidTagScanRelay(data) {
+      return data.keys().hasAll(['id', 'tagToken', 'ownerId', 'finderMessage', 'createdAt'])
+        && data.keys().hasOnly(['id', 'tagToken', 'ownerId', 'finderMessage', 'finderSafeContact', 'governorateId', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.tagToken)
+        && isValidId(data.ownerId)
+        && data.finderMessage is string && data.finderMessage.size() >= 5 && data.finderMessage.size() <= 500
+        && (!('finderSafeContact' in data) || (data.finderSafeContact is string && data.finderSafeContact.size() <= 120))
+        && (!('governorateId' in data) || (data.governorateId is string && data.governorateId.size() <= 40))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidWatchlistRule(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'title', 'active', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'title', 'keywords', 'category', 'color', 'brand', 'governorateId', 'maxDistanceKm', 'active', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.title is string && data.title.size() >= 2 && data.title.size() <= 100
+        && (!('keywords' in data) || (data.keywords is string && data.keywords.size() <= 200))
+        && (!('category' in data) || (data.category is string && data.category.size() <= 40))
+        && (!('color' in data) || (data.color is string && data.color.size() <= 32))
+        && (!('brand' in data) || (data.brand is string && data.brand.size() <= 80))
+        && (!('governorateId' in data) || (data.governorateId is string && data.governorateId.size() <= 40))
+        && (!('maxDistanceKm' in data) || (data.maxDistanceKm is number && data.maxDistanceKm >= 1 && data.maxDistanceKm <= 1000))
+        && data.active is bool
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidRecoveryCase(data) {
+      return data.keys().hasAll(['id', 'reportId', 'reportTitle', 'ownerId', 'stage', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly([
+          'id', 'reportId', 'reportTitle', 'ownerId', 'ownerDisplayName',
+          'counterpartyId', 'counterpartyDisplayName', 'stage',
+          'verificationNote', 'handoverLocation', 'lastMessageText', 'lastMessageAt',
+          'createdAt', 'updatedAt'
+        ])
+        && isValidId(data.id)
+        && isValidId(data.reportId)
+        && data.reportTitle is string && data.reportTitle.size() >= 2 && data.reportTitle.size() <= 120
+        && isValidId(data.ownerId)
+        && (!('ownerDisplayName' in data) || (data.ownerDisplayName is string && data.ownerDisplayName.size() >= 1 && data.ownerDisplayName.size() <= 80))
+        && (!('counterpartyId' in data) || isValidId(data.counterpartyId))
+        && (!('counterpartyDisplayName' in data) || (data.counterpartyDisplayName is string && data.counterpartyDisplayName.size() >= 1 && data.counterpartyDisplayName.size() <= 80))
+        && data.stage in [
+          'report_published', 'possible_match_found', 'contact_initiated',
+          'ownership_verification', 'handover_arranged', 'item_returned',
+          'case_closed', 'disputed', 'cancelled'
+        ]
+        && (!('verificationNote' in data) || (data.verificationNote is string && data.verificationNote.size() <= 500))
+        && (!('handoverLocation' in data) || (data.handoverLocation is string && data.handoverLocation.size() <= 160))
+        && (!('lastMessageText' in data) || (data.lastMessageText is string && data.lastMessageText.size() <= 240))
+        && (!('lastMessageAt' in data) || data.lastMessageAt is timestamp)
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidCaseChatMessage(data) {
+      return data.keys().hasAll(['id', 'caseId', 'senderId', 'senderName', 'body', 'kind', 'createdAt'])
+        && data.keys().hasOnly(['id', 'caseId', 'senderId', 'senderName', 'body', 'kind', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.caseId)
+        && isValidId(data.senderId)
+        && data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 80
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 1500
+        && data.kind in ['text', 'handover_proposal', 'verification_prompt']
+        && data.createdAt is timestamp;
+    }
+
+    function isCaseParticipant(caseId) {
+      let caseDoc = get(/databases/$(database)/documents/recoveryCases/$(caseId)).data;
+      return isSignedIn() && (
+        caseDoc.ownerId == request.auth.uid ||
+        ('counterpartyId' in caseDoc && caseDoc.counterpartyId == request.auth.uid)
+      );
+    }
+
+    function isValidOrganization(data) {
+      return data.keys().hasAll(['id', 'nameEn', 'nameAr', 'orgType', 'governorateId', 'cityId', 'verificationStatus', 'applicantUid', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'nameEn', 'nameAr', 'orgType', 'governorateId', 'cityId', 'verificationStatus', 'applicantUid', 'contactDesk', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && data.nameEn is string && data.nameEn.size() >= 2 && data.nameEn.size() <= 120
+        && data.nameAr is string && data.nameAr.size() >= 2 && data.nameAr.size() <= 120
+        && data.orgType in ['university', 'school', 'mall', 'metro', 'train', 'airport', 'transport', 'institution']
+        && data.governorateId is string && data.governorateId.size() >= 2 && data.governorateId.size() <= 40
+        && data.cityId is string && data.cityId.size() >= 2 && data.cityId.size() <= 64
+        && data.verificationStatus in ['pending', 'verified', 'suspended']
+        && isValidId(data.applicantUid)
+        && (!('contactDesk' in data) || (data.contactDesk is string && data.contactDesk.size() <= 160))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidInstitutionalRecord(data) {
+      return data.keys().hasAll(['id', 'organizationId', 'staffUid', 'itemName', 'category', 'storageLocation', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'organizationId', 'staffUid', 'itemName', 'category', 'storageLocation', 'status', 'handoverRef', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.organizationId)
+        && isValidId(data.staffUid)
+        && data.itemName is string && data.itemName.size() >= 2 && data.itemName.size() <= 120
+        && data.category is string && data.category.size() >= 2 && data.category.size() <= 40
+        && data.storageLocation is string && data.storageLocation.size() >= 2 && data.storageLocation.size() <= 120
+        && data.status in ['in_custody', 'verification_pending', 'handed_over', 'disposed']
+        && (!('handoverRef' in data) || (data.handoverRef is string && data.handoverRef.size() <= 120))
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupportTicket(data) {
+      return data.keys().hasAll(['id', 'ownerId', 'subject', 'category', 'priority', 'status', 'initialMessage', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'ownerId', 'subject', 'category', 'priority', 'status', 'initialMessage', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.ownerId)
+        && data.subject is string && data.subject.size() >= 4 && data.subject.size() <= 150
+        && data.category in ['account', 'recovery', 'abuse_report', 'organization', 'technical', 'privacy']
+        && data.priority in ['low', 'medium', 'high', 'urgent']
+        && data.status in ['open', 'in_progress', 'resolved', 'closed']
+        && data.initialMessage is string && data.initialMessage.size() >= 10 && data.initialMessage.size() <= 2000
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidSupportMessage(data) {
+      return data.keys().hasAll(['id', 'ticketId', 'authorId', 'authorRole', 'body', 'createdAt'])
+        && data.keys().hasOnly(['id', 'ticketId', 'authorId', 'authorRole', 'body', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.ticketId)
+        && isValidId(data.authorId)
+        && data.authorRole in ['user', 'support_agent', 'admin']
+        && data.body is string && data.body.size() >= 1 && data.body.size() <= 2000
+        && data.createdAt is timestamp;
+    }
+
+    function isValidSupportInternalNote(data) {
+      return data.keys().hasAll(['id', 'staffUid', 'note', 'createdAt'])
+        && data.keys().hasOnly(['id', 'staffUid', 'note', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.staffUid)
+        && data.note is string && data.note.size() >= 1 && data.note.size() <= 2000
+        && data.createdAt is timestamp;
+    }
+
+    function isValidModerationCase(data) {
+      return data.keys().hasAll(['id', 'reportId', 'reporterUid', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && data.keys().hasOnly(['id', 'reportId', 'reporterUid', 'reason', 'status', 'createdAt', 'updatedAt'])
+        && isValidId(data.id)
+        && isValidId(data.reportId)
+        && isValidId(data.reporterUid)
+        && data.reason is string && data.reason.size() >= 4 && data.reason.size() <= 400
+        && data.status in ['pending', 'reviewed', 'dismissed', 'action_taken']
+        && data.createdAt is timestamp
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidNotificationItem(data) {
+      return data.keys().hasAll(['id', 'userId', 'kind', 'titleEn', 'titleAr', 'bodyEn', 'bodyAr', 'read', 'createdAt'])
+        && data.keys().hasOnly(['id', 'userId', 'kind', 'titleEn', 'titleAr', 'bodyEn', 'bodyAr', 'read', 'linkPath', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.userId)
+        && data.kind in ['match', 'watchlist', 'recovery', 'support', 'qr_scan', 'org']
+        && data.titleEn is string && data.titleEn.size() >= 2 && data.titleEn.size() <= 120
+        && data.titleAr is string && data.titleAr.size() >= 2 && data.titleAr.size() <= 120
+        && data.bodyEn is string && data.bodyEn.size() >= 2 && data.bodyEn.size() <= 300
+        && data.bodyAr is string && data.bodyAr.size() >= 2 && data.bodyAr.size() <= 300
+        && data.read is bool
+        && (!('linkPath' in data) || (data.linkPath is string && data.linkPath.size() <= 200))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidUserReview(data) {
+      return data.keys().hasAll(['id', 'caseId', 'reviewerUid', 'targetUid', 'rating', 'createdAt'])
+        && data.keys().hasOnly(['id', 'caseId', 'reviewerUid', 'targetUid', 'rating', 'comment', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.caseId)
+        && isValidId(data.reviewerUid)
+        && isValidId(data.targetUid)
+        && data.reviewerUid != data.targetUid
+        && data.rating is int && data.rating >= 1 && data.rating <= 5
+        && (!('comment' in data) || (data.comment is string && data.comment.size() <= 400))
+        && data.createdAt is timestamp;
+    }
+
+    function isValidPlatformSettings(data) {
+      return data.keys().hasAll(['platformName', 'maintenanceMode', 'adsEnabled', 'maxReportsPerDay', 'updatedAt'])
+        && data.keys().hasOnly([
+          'platformName', 'maintenanceMode', 'adsEnabled', 'adSlotsHome',
+          'adSlotsSearch', 'adSlotsSidebar', 'adSlotsInfo', 'maxReportsPerDay',
+          'autoModerationStrict', 'updatedAt'
+        ])
+        && data.platformName is string && data.platformName.size() >= 2 && data.platformName.size() <= 60
+        && data.maintenanceMode is bool
+        && data.adsEnabled is bool
+        && (!('adSlotsHome' in data) || data.adSlotsHome is bool)
+        && (!('adSlotsSearch' in data) || data.adSlotsSearch is bool)
+        && (!('adSlotsSidebar' in data) || data.adSlotsSidebar is bool)
+        && (!('adSlotsInfo' in data) || data.adSlotsInfo is bool)
+        && data.maxReportsPerDay is int && data.maxReportsPerDay >= 1 && data.maxReportsPerDay <= 100
+        && (!('autoModerationStrict' in data) || data.autoModerationStrict is bool)
+        && data.updatedAt is timestamp;
+    }
+
+    function isValidAdminAuditLog(data) {
+      return data.keys().hasAll(['id', 'adminUid', 'action', 'targetPath', 'summary', 'createdAt'])
+        && data.keys().hasOnly(['id', 'adminUid', 'action', 'targetPath', 'summary', 'createdAt'])
+        && isValidId(data.id)
+        && isValidId(data.adminUid)
+        && data.action is string && data.action.size() >= 2 && data.action.size() <= 100
+        && data.targetPath is string && data.targetPath.size() >= 2 && data.targetPath.size() <= 200
+        && data.summary is string && data.summary.size() >= 2 && data.summary.size() <= 400
+        && data.createdAt is timestamp;
+    }
+
+    // 4. Collection Rules
+
+    // Private User PII
+    match /users/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin() || (isSignedIn() && resource.data.uid == request.auth.uid);
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserPrivate(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().role == 'user'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserPrivate(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().role == existing().role
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'phone', 'phoneVerified', 'phoneVerifiedAt', 'address',
+              'preferredLang', 'preferredTheme', 'notifyInApp', 'notifyEmail', 'notifyPush', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    // Public Non-PII User Profiles
+    match /usersPublic/{userId} {
+      allow get: if isValidId(userId);
+      allow list: if resource.data.reputationScore >= 0;
+      allow create: if isVerifiedUser()
+        && isValidId(userId)
+        && isOwner(userId)
+        && isValidUserPublic(incoming())
+        && incoming().uid == request.auth.uid
+        && incoming().reputationScore == 5
+        && incoming().successfulReturns == 0
+        && incoming().validReports == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(userId)
+        && isValidUserPublic(incoming())
+        && incoming().uid == existing().uid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(userId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'photoUrl', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(userId) && (isOwner(userId) || isAdmin());
+    }
+
+    // Trusted Admin & Supervisor Markers
+    match /admins/{userId} {
+      allow get: if isValidId(userId) && (isOwner(userId) || isAdmin());
+      allow list: if isAdmin();
+      allow create: if isValidId(userId)
+        && isValidAdminMarker(incoming())
+        && incoming().uid == userId
+        && incoming().createdAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isVerifiedUser()
+            && isOwner(userId)
+            && ('email' in request.auth.token)
+            && request.auth.token.email is string
+            && incoming().email.lower() == request.auth.token.email.lower()
+            && ('inviteId' in incoming())
+            && exists(/databases/$(database)/documents/supervisorInvites/$(incoming().inviteId))
+            && get(/databases/$(database)/documents/supervisorInvites/$(incoming().inviteId)).data.emailLower == request.auth.token.email.lower()
+            && get(/databases/$(database)/documents/supervisorInvites/$(incoming().inviteId)).data.active == true
+          )
+        );
+      allow update: if isValidId(userId) && isAdmin() && isValidAdminMarker(incoming()) && incoming().uid == existing().uid && incoming().createdAt == existing().createdAt;
+      allow delete: if isValidId(userId) && isAdmin();
+    }
+
+    // Supervisor Invitations by Email
+    match /supervisorInvites/{inviteId} {
+      allow get: if isValidId(inviteId) && (
+        isAdmin() ||
+        (
+          isVerifiedUser()
+          && ('email' in request.auth.token)
+          && request.auth.token.email is string
+          && (resource == null || resource.data.emailLower == request.auth.token.email.lower())
+        )
+      );
+      allow list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidId(inviteId)
+        && isValidSupervisorInvite(incoming())
+        && incoming().id == inviteId
+        && incoming().appointedByUid == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(inviteId)
+        && isValidSupervisorInvite(incoming())
+        && incoming().id == existing().id
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(inviteId);
+    }
+
+    // Sanitized Public Reports
+    match /reports/{reportId} {
+      allow get: if isValidId(reportId) && (resource == null || existing().visibility == 'public' || isOwner(existing().ownerId) || isAdmin());
+      allow list: if resource.data.visibility == 'public' || (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(reportId)
+        && isValidItemReport(incoming())
+        && incoming().id == reportId
+        && incoming().ownerId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(reportId)
+        && isValidItemReport(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(existing().ownerId)
+            && !(existing().status in ['closed', 'recovered'])
+            && (
+              // Action: Edit report details
+              incoming().diff(existing()).affectedKeys().hasOnly([
+                'title', 'description', 'category', 'color', 'brand',
+                'governorateId', 'cityId', 'districtId', 'areaNote',
+                'publicLat', 'publicLng', 'locationPrivacy', 'dateOccurred',
+                'timeApprox', 'photoUrls', 'updatedAt'
+              ])
+              ||
+              // Action: Update status / close / mark recovered
+              (
+                incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+                && incoming().status in ['open', 'matched', 'recovered', 'closed']
+              )
+            )
+          )
+        );
+      allow delete: if isValidId(reportId) && (isOwner(existing().ownerId) || isAdmin());
+
+      // Private Exact Coordinates & Verification Questions
+      match /private/{detailId} {
+        allow get: if isValidId(reportId) && isValidId(detailId) && (
+          isAdmin() ||
+          (isSignedIn() && get(/databases/$(database)/documents/reports/$(reportId)).data.ownerId == request.auth.uid)
+        );
+        allow list: if isSignedIn() && (resource.data.ownerId == request.auth.uid || isAdmin());
+        allow create: if isVerifiedUser()
+          && isValidId(reportId) && isValidId(detailId)
+          && isValidReportPrivateDetail(incoming())
+          && incoming().reportId == reportId
+          && incoming().ownerId == request.auth.uid
+          && existsAfter(/databases/$(database)/documents/reports/$(reportId))
+          && incoming().createdAt == request.time
+          && incoming().updatedAt == request.time;
+        allow update: if isVerifiedUser()
+          && isValidId(reportId) && isValidId(detailId)
+          && isValidReportPrivateDetail(incoming())
+          && incoming().reportId == existing().reportId
+          && incoming().ownerId == existing().ownerId
+          && incoming().createdAt == existing().createdAt
+          && incoming().updatedAt == request.time
+          && (isOwner(existing().ownerId) || isAdmin());
+        allow delete: if isValidId(reportId) && isValidId(detailId) && (isOwner(existing().ownerId) || isAdmin());
+      }
+    }
+
+    // Smart QR Tags
+    match /smartTags/{token} {
+      allow get: if isValidId(token) && (resource == null || existing().status != 'deactivated' || isOwner(existing().ownerId) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(token)
+        && isValidSmartTag(incoming())
+        && incoming().token == token
+        && incoming().ownerId == request.auth.uid
+        && incoming().scanCount == 0
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(token)
+        && isValidSmartTag(incoming())
+        && incoming().token == existing().token
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(existing().ownerId)
+            && incoming().diff(existing()).affectedKeys().hasOnly(['itemLabel', 'category', 'safeNote', 'status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(token) && (isOwner(existing().ownerId) || isAdmin());
+    }
+
+    // Tag Scan Protected Finder Relay
+    match /tagScans/{scanId} {
+      allow get: if isValidId(scanId) && (isOwner(existing().ownerId) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(scanId)
+        && isValidTagScanRelay(incoming())
+        && incoming().id == scanId
+        && exists(/databases/$(database)/documents/smartTags/$(incoming().tagToken))
+        && get(/databases/$(database)/documents/smartTags/$(incoming().tagToken)).data.ownerId == incoming().ownerId
+        && incoming().createdAt == request.time;
+      allow update: if false;
+      allow delete: if isValidId(scanId) && (isOwner(existing().ownerId) || isAdmin());
+    }
+
+    // Smart Watchlists
+    match /watchlists/{watchlistId} {
+      allow get: if isValidId(watchlistId) && (isOwner(existing().ownerId) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(watchlistId)
+        && isValidWatchlistRule(incoming())
+        && incoming().id == watchlistId
+        && incoming().ownerId == request.auth.uid
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(watchlistId)
+        && isValidWatchlistRule(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (isOwner(existing().ownerId) || isAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly([
+          'title', 'keywords', 'category', 'color', 'brand', 'governorateId', 'maxDistanceKm', 'active', 'updatedAt'
+        ]);
+      allow delete: if isValidId(watchlistId) && (isOwner(existing().ownerId) || isAdmin());
+    }
+
+    // Recovery Tracker Cases & Protected Two-Party Chat
+    match /recoveryCases/{caseId} {
+      allow get: if isValidId(caseId) && (
+        isOwner(existing().ownerId) ||
+        ('counterpartyId' in existing() && isOwner(existing().counterpartyId)) ||
+        isAdmin()
+      );
+      allow list: if (isSignedIn() && (resource.data.ownerId == request.auth.uid || resource.data.counterpartyId == request.auth.uid)) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(caseId)
+        && isValidRecoveryCase(incoming())
+        && incoming().id == caseId
+        && incoming().ownerId == request.auth.uid
+        && (!('counterpartyId' in incoming()) || (
+          incoming().counterpartyId != request.auth.uid
+          && (isSeedReportId(incoming().reportId) || incoming().counterpartyId == get(/databases/$(database)/documents/reports/$(incoming().reportId)).data.ownerId)
+        ))
+        && (isSeedReportId(incoming().reportId) || exists(/databases/$(database)/documents/reports/$(incoming().reportId)))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(caseId)
+        && isValidRecoveryCase(incoming())
+        && incoming().id == existing().id
+        && incoming().reportId == existing().reportId
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            (isOwner(existing().ownerId) || ('counterpartyId' in existing() && isOwner(existing().counterpartyId)))
+            && !(existing().stage in ['case_closed', 'cancelled'])
+            && (!('counterpartyId' in existing()) || incoming().counterpartyId == existing().counterpartyId)
+            && incoming().diff(existing()).affectedKeys().hasOnly([
+              'stage', 'counterpartyId', 'counterpartyDisplayName', 'verificationNote',
+              'handoverLocation', 'lastMessageText', 'lastMessageAt', 'updatedAt'
+            ])
+          )
+        );
+      allow delete: if isValidId(caseId) && (isOwner(existing().ownerId) || isAdmin());
+
+      match /messages/{messageId} {
+        allow get, list: if isValidId(caseId) && (isAdmin() || isCaseParticipant(caseId));
+        allow create: if isVerifiedUser()
+          && isValidId(caseId) && isValidId(messageId)
+          && isValidCaseChatMessage(incoming())
+          && incoming().id == messageId
+          && incoming().caseId == caseId
+          && incoming().senderId == request.auth.uid
+          && incoming().createdAt == request.time
+          && (isAdmin() || isCaseParticipant(caseId))
+          && !(get(/databases/$(database)/documents/recoveryCases/$(caseId)).data.stage in ['case_closed', 'cancelled']);
+        allow update, delete: if false;
+      }
+    }
+
+    // Organizations & Institutional Partners
+    match /organizations/{orgId} {
+      allow get: if isValidId(orgId) && (existing().verificationStatus == 'verified' || isOwner(existing().applicantUid) || isAdmin());
+      allow list: if resource.data.verificationStatus == 'verified' || (isSignedIn() && resource.data.applicantUid == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(orgId)
+        && isValidOrganization(incoming())
+        && incoming().id == orgId
+        && incoming().applicantUid == request.auth.uid
+        && incoming().verificationStatus == 'pending'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(orgId)
+        && isValidOrganization(incoming())
+        && incoming().id == existing().id
+        && incoming().applicantUid == existing().applicantUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(existing().applicantUid)
+            && incoming().verificationStatus == existing().verificationStatus
+            && incoming().diff(existing()).affectedKeys().hasOnly(['nameEn', 'nameAr', 'contactDesk', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(orgId) && isAdmin();
+    }
+
+    // Institutional Intake Records
+    match /institutionalRecords/{recordId} {
+      allow get: if isValidId(recordId) && (isOwner(existing().staffUid) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.staffUid == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(recordId)
+        && isValidInstitutionalRecord(incoming())
+        && incoming().id == recordId
+        && incoming().staffUid == request.auth.uid
+        && (isSeedOrgId(incoming().organizationId) || exists(/databases/$(database)/documents/organizations/$(incoming().organizationId)))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(recordId)
+        && isValidInstitutionalRecord(incoming())
+        && incoming().id == existing().id
+        && incoming().organizationId == existing().organizationId
+        && incoming().staffUid == existing().staffUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(existing().staffUid)
+            && !(existing().status in ['handed_over', 'disposed'])
+            && incoming().diff(existing()).affectedKeys().hasOnly(['storageLocation', 'status', 'handoverRef', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(recordId) && isAdmin();
+    }
+
+    // Support Tickets & Messages & Isolated Internal Notes
+    match /supportTickets/{ticketId} {
+      allow get: if isValidId(ticketId) && (isOwner(existing().ownerId) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.ownerId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(ticketId)
+        && isValidSupportTicket(incoming())
+        && incoming().id == ticketId
+        && incoming().ownerId == request.auth.uid
+        && incoming().status == 'open'
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(ticketId)
+        && isValidSupportTicket(incoming())
+        && incoming().id == existing().id
+        && incoming().ownerId == existing().ownerId
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time
+        && (
+          isAdmin() ||
+          (
+            isOwner(existing().ownerId)
+            && existing().status != 'closed'
+            && incoming().status == 'closed'
+            && incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt'])
+          )
+        );
+      allow delete: if isValidId(ticketId) && isAdmin();
+
+      match /messages/{messageId} {
+        allow get: if isValidId(ticketId) && isValidId(messageId) && (
+          isAdmin() ||
+          (isSignedIn() && get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.ownerId == request.auth.uid)
+        );
+        allow list: if isValidId(ticketId) && (
+          isAdmin() ||
+          (isSignedIn() && get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.ownerId == request.auth.uid)
+        );
+        allow create: if isVerifiedUser()
+          && isValidId(ticketId) && isValidId(messageId)
+          && isValidSupportMessage(incoming())
+          && incoming().id == messageId
+          && incoming().ticketId == ticketId
+          && incoming().authorId == request.auth.uid
+          && incoming().createdAt == request.time
+          && (
+            (isAdmin() && incoming().authorRole in ['admin', 'support_agent']) ||
+            (get(/databases/$(database)/documents/supportTickets/$(ticketId)).data.ownerId == request.auth.uid && incoming().authorRole == 'user')
+          );
+        allow update, delete: if false;
+      }
+
+      match /internalNotes/{noteId} {
+        allow get, list: if isValidId(ticketId) && isAdmin();
+        allow create: if isAdmin()
+          && isValidId(ticketId) && isValidId(noteId)
+          && isValidSupportInternalNote(incoming())
+          && incoming().id == noteId
+          && incoming().staffUid == request.auth.uid
+          && incoming().createdAt == request.time;
+        allow update, delete: if isAdmin();
+      }
+    }
+
+    // Moderation Queue
+    match /moderationCases/{caseId} {
+      allow get: if isValidId(caseId) && (isOwner(existing().reporterUid) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.reporterUid == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(caseId)
+        && isValidModerationCase(incoming())
+        && incoming().id == caseId
+        && incoming().reporterUid == request.auth.uid
+        && incoming().status == 'pending'
+        && (isSeedReportId(incoming().reportId) || exists(/databases/$(database)/documents/reports/$(incoming().reportId)))
+        && incoming().createdAt == request.time
+        && incoming().updatedAt == request.time;
+      allow update: if isAdmin()
+        && isValidId(caseId)
+        && isValidModerationCase(incoming())
+        && incoming().id == existing().id
+        && incoming().reportId == existing().reportId
+        && incoming().reporterUid == existing().reporterUid
+        && incoming().createdAt == existing().createdAt
+        && incoming().updatedAt == request.time;
+      allow delete: if isAdmin() && isValidId(caseId);
+    }
+
+    // User Notifications
+    match /notifications/{notificationId} {
+      allow get: if isValidId(notificationId) && (isOwner(existing().userId) || isAdmin());
+      allow list: if (isSignedIn() && resource.data.userId == request.auth.uid) || isAdmin();
+      allow create: if isVerifiedUser()
+        && isValidId(notificationId)
+        && isValidNotificationItem(incoming())
+        && incoming().id == notificationId
+        && (incoming().userId == request.auth.uid || isAdmin())
+        && incoming().createdAt == request.time;
+      allow update: if isVerifiedUser()
+        && isValidId(notificationId)
+        && isValidNotificationItem(incoming())
+        && (isOwner(existing().userId) || isAdmin())
+        && incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+      allow delete: if isValidId(notificationId) && (isOwner(existing().userId) || isAdmin());
+    }
+
+    // User Reviews (Only after confirmed recovery case)
+    match /userReviews/{reviewId} {
+      allow get: if isValidId(reviewId);
+      allow list: if resource.data.rating >= 1;
+      allow create: if isVerifiedUser()
+        && isValidId(reviewId)
+        && isValidUserReview(incoming())
+        && incoming().id == reviewId
+        && incoming().reviewerUid == request.auth.uid
+        && exists(/databases/$(database)/documents/recoveryCases/$(incoming().caseId))
+        && incoming().createdAt == request.time;
+      allow update, delete: if isAdmin() && isValidId(reviewId);
+    }
+
+    // Platform Settings
+    match /platformSettings/{settingId} {
+      allow get: if isValidId(settingId);
+      allow list: if resource.data.maxReportsPerDay >= 1;
+      allow create, update: if isAdmin()
+        && isValidId(settingId)
+        && isValidPlatformSettings(incoming())
+        && incoming().updatedAt == request.time;
+      allow delete: if false;
+    }
+
+    // Admin Audit Logs
+    match /adminAuditLogs/{logId} {
+      allow get, list: if isAdmin();
+      allow create: if isAdmin()
+        && isValidId(logId)
+        && isValidAdminAuditLog(incoming())
+        && incoming().id == logId
+        && incoming().adminUid == request.auth.uid
+        && incoming().createdAt == request.time;
+      allow update, delete: if false;
+    }
+  }
+}
