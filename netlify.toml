@@ -1,0 +1,21 @@
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/api/*"
+  to = "/404"
+  status = 404
+
+[[redirects]]
+  from = "/assets/*"
+  to = "/404"
+  status = 404
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200

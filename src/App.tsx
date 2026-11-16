@@ -1,26 +1,27 @@
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { AlertTriangle, WifiOff, Wrench } from 'lucide-react';
 import { AppProvider, useApp } from './context/AppContext';
 import { t } from './lib/i18n';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomePage } from './pages/HomePage';
-import { SearchPage } from './pages/SearchPage';
-import { ReportWizardPage } from './pages/ReportWizardPage';
-import { ReportDetailsPage } from './pages/ReportDetailsPage';
-import { MapPage } from './pages/MapPage';
-import { RecoveryTrackerPage } from './pages/RecoveryTrackerPage';
-import { AiAssistantPage } from './pages/AiAssistantPage';
-import { WatchlistsPage } from './pages/WatchlistsPage';
-import { QrTagsPage } from './pages/QrTagsPage';
-import { OrganizationsPage } from './pages/OrganizationsPage';
-import { SupportPage } from './pages/SupportPage';
-import { ProfilePage } from './pages/ProfilePage';
-import { AuthPage } from './pages/AuthPage';
-import { AdminPage } from './pages/AdminPage';
-import { InfoPage } from './pages/InfoPages';
 import { GoogleMapsRootProvider } from './components/EgyptGoogleMap';
 import { ErrorBoundary } from './components/ErrorBoundary';
+
+const SearchPage = lazy(() => import('./pages/SearchPage').then((m) => ({ default: m.SearchPage })));
+const ReportWizardPage = lazy(() => import('./pages/ReportWizardPage').then((m) => ({ default: m.ReportWizardPage })));
+const ReportDetailsPage = lazy(() => import('./pages/ReportDetailsPage').then((m) => ({ default: m.ReportDetailsPage })));
+const MapPage = lazy(() => import('./pages/MapPage').then((m) => ({ default: m.MapPage })));
+const RecoveryTrackerPage = lazy(() => import('./pages/RecoveryTrackerPage').then((m) => ({ default: m.RecoveryTrackerPage })));
+const AiAssistantPage = lazy(() => import('./pages/AiAssistantPage').then((m) => ({ default: m.AiAssistantPage })));
+const WatchlistsPage = lazy(() => import('./pages/WatchlistsPage').then((m) => ({ default: m.WatchlistsPage })));
+const QrTagsPage = lazy(() => import('./pages/QrTagsPage').then((m) => ({ default: m.QrTagsPage })));
+const OrganizationsPage = lazy(() => import('./pages/OrganizationsPage').then((m) => ({ default: m.OrganizationsPage })));
+const SupportPage = lazy(() => import('./pages/SupportPage').then((m) => ({ default: m.SupportPage })));
+const ProfilePage = lazy(() => import('./pages/ProfilePage').then((m) => ({ default: m.ProfilePage })));
+const AuthPage = lazy(() => import('./pages/AuthPage').then((m) => ({ default: m.AuthPage })));
+const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const InfoPage = lazy(() => import('./pages/InfoPages').then((m) => ({ default: m.InfoPage })));
 
 const AppShell: React.FC = () => {
   const {
@@ -159,7 +160,15 @@ const AppShell: React.FC = () => {
 
       <main className="flex-1">
         <ErrorBoundary key={currentPath} isAr={isAr}>
-          {renderPage()}
+          <Suspense
+            fallback={
+              <div className="max-w-[1280px] mx-auto px-4 py-16 text-center text-sm text-slate-500">
+                {isAr ? 'جاري التحميل...' : 'Loading...'}
+              </div>
+            }
+          >
+            {renderPage()}
+          </Suspense>
         </ErrorBoundary>
       </main>
 
@@ -170,10 +179,12 @@ const AppShell: React.FC = () => {
 
 export default function App() {
   return (
-    <AppProvider>
-      <GoogleMapsRootProvider>
-        <AppShell />
-      </GoogleMapsRootProvider>
-    </AppProvider>
+    <ErrorBoundary>
+      <AppProvider>
+        <GoogleMapsRootProvider>
+          <AppShell />
+        </GoogleMapsRootProvider>
+      </AppProvider>
+    </ErrorBoundary>
   );
 }

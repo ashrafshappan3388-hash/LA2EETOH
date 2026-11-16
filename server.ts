@@ -84,6 +84,10 @@ async function startServer() {
   app.use(express.json({ limit: '6mb' }));
   resumeSavedDirectWhatsAppOnStartup();
 
+  app.get('/healthz', (_req: Request, res: Response) => {
+    res.status(200).send('ok');
+  });
+
   // Health endpoint for Admin System Health view
   app.get('/api/health', (_req: Request, res: Response) => {
     const geminiConfigured = Boolean(getGeminiClient());
@@ -655,10 +659,39 @@ Allowed color IDs: black, navy, red, green, amber, silver, white, violet.`,
     res.type('text/plain').send('# Google AdSense publisher ID not yet configured.\n');
   });
 
-  if (process.env.NODE_ENV === 'production') {
-    const distPath = path.join(__dirname, 'dist');
+  const distPath = path.join(__dirname, 'dist');
+  let hasDistBuild = fs.existsSync(path.join(distPath, 'index.html'));
+  const isDevLifecycle = process.env.npm_lifecycle_event === 'dev';
+  const useProductionStatic =
+    process.env.NODE_ENV === 'production' || (hasDistBuild && !isDevLifecycle);
+
+  if (useProductionStatic) {
+    if (!hasDistBuild) {
+      const { build } = await import('vite');
+      await build();
+      hasDistBuild = fs.existsSync(path.join(distPath, 'index.html'));
+    }
+    app.use(
+      '/assets',
+      express.static(path.join(distPath, 'assets'), {
+        maxAge: '365d',
+        immutable: true,
+        fallthrough: false,
+      })
+    );
+    app.use((err: unknown, req: Request, res: Response, next: NextFunction) => {
+      if (req.path.startsWith('/assets/')) {
+        res.status(404).type('text/plain').send('Asset not found');
+        return;
+      }
+      next(err);
+    });
+    app.use('/api/*', (_req: Request, res: Response) => {
+      res.status(404).json({ error: 'API_NOT_FOUND' });
+    });
     app.use(express.static(distPath));
     app.get('*', (_req: Request, res: Response) => {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       res.sendFile(path.join(distPath, 'index.html'));
     });
   } else {
