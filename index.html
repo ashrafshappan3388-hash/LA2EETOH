@@ -25,7 +25,15 @@
     <link
       href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
       rel="stylesheet"
+      media="print"
+      onload="this.media='all'"
     />
+    <noscript>
+      <link
+        href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet"
+      />
+    </noscript>
   </head>
   <body class="bg-slate-50 text-slate-900 dark:bg-slate-950 dark:text-slate-100 antialiased">
     <div id="root">
@@ -35,16 +43,37 @@
       >
         <div style="width:44px;height:44px;border-radius:14px;background:linear-gradient(135deg,#1E3A8A,#2563EB,#6D28D9);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:20px;box-shadow:0 10px 25px rgba(37,99,235,.25);">✓</div>
         <div style="font-size:16px;font-weight:700;">LA2EETOH · لقيته</div>
-        <div id="la-boot-status" style="font-size:13px;color:#475569;">جاري تحميل المنصة...</div>
+        <div id="la-boot-status" style="font-size:13px;color:#475569;max-width:340px;line-height:1.7;">جاري تحميل المنصة...</div>
       </div>
     </div>
     <script>
-      window.addEventListener('error', function (e) {
-        var el = document.getElementById('la-boot-status');
-        if (el && e && e.target && e.target.tagName === 'SCRIPT') {
-          el.innerHTML = 'تعذر تحميل ملفات التشغيل. <button onclick="location.reload()" style="margin-inline-start:8px;padding:4px 12px;border-radius:8px;background:#2563EB;color:#fff;border:0;cursor:pointer;font-weight:700;">إعادة المحاولة</button>';
+      (function () {
+        function showBootRetry(msg) {
+          var el = document.getElementById('la-boot-status');
+          if (!el) return;
+          el.innerHTML =
+            msg +
+            '<br/><button onclick="location.reload()" style="margin-top:10px;padding:8px 18px;border-radius:10px;background:#2563EB;color:#fff;border:0;cursor:pointer;font-weight:700;font-size:13px;">إعادة تحميل الصفحة</button>';
         }
-      }, true);
+        window.addEventListener(
+          'error',
+          function (e) {
+            if (document.getElementById('la-boot-loader')) {
+              if (e && e.target && (e.target.tagName === 'SCRIPT' || e.target.tagName === 'LINK')) {
+                showBootRetry('تعذر تحميل بعض ملفات التشغيل بسبب الشبكة.');
+              } else if (e && e.message) {
+                showBootRetry('حدث خطأ أثناء تشغيل الصفحة.');
+              }
+            }
+          },
+          true
+        );
+        setTimeout(function () {
+          if (document.getElementById('la-boot-loader')) {
+            showBootRetry('التحميل يستغرق وقتاً أطول من المعتاد. تأكد من الاتصال بالإنترنت أو أعد التحميل.');
+          }
+        }, 10000);
+      })();
     </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -11,6 +11,18 @@ export default defineConfig(() => {
         '@': path.resolve(import.meta.dirname, '.'),
       },
     },
+    build: {
+      target: 'es2020',
+      rolldownOptions: {
+        output: {
+          manualChunks(id) {
+            if (id.includes('node_modules/firebase')) return 'firebase-vendor';
+            if (id.includes('node_modules/react') || id.includes('node_modules/react-dom')) return 'react-vendor';
+            if (id.includes('node_modules/lucide-react')) return 'icons-vendor';
+          },
+        },
+      },
+    },
     server: {
       // Allow AI Studio Cloud Run preview & dev hostnames through Vite middleware
       allowedHosts: true as const,

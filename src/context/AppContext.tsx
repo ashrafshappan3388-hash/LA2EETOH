@@ -328,13 +328,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  // Fetch server Maps config fallback if not bundled in Vite env
+  // Fetch server Maps config fallback if not bundled in Vite env (skip on static-only hosts)
   useEffect(() => {
-    if (!mapsApiKey) {
+    if (!mapsApiKey && import.meta.env.VITE_STATIC_HOST !== 'true') {
       fetch('/api/maps/config')
-        .then((r) => r.json())
-        .then((data: { configured?: boolean; apiKey?: string | null }) => {
-          if (data.configured && data.apiKey) setMapsApiKey(data.apiKey);
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { configured?: boolean; apiKey?: string | null } | null) => {
+          if (data?.configured && data.apiKey) setMapsApiKey(data.apiKey);
         })
         .catch(() => {});
     }
