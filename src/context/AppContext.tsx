@@ -236,6 +236,26 @@ function safeSetStorage(key: string, value: string): void {
   }
 }
 
+const APP_BASE = (import.meta.env.BASE_URL || '/').replace(/\/+$/, '');
+
+function stripBasePath(fullPathWithSearch: string): string {
+  if (!APP_BASE) return fullPathWithSearch || '/';
+  const [rawPath, rawSearch] = fullPathWithSearch.split('?');
+  let stripped = rawPath || '/';
+  if (stripped === APP_BASE || stripped === `${APP_BASE}/`) {
+    stripped = '/';
+  } else if (stripped.startsWith(`${APP_BASE}/`)) {
+    stripped = stripped.slice(APP_BASE.length) || '/';
+  }
+  return rawSearch ? `${stripped}?${rawSearch}` : stripped;
+}
+
+function withBasePath(appPath: string): string {
+  const normalized = appPath.startsWith('/') ? appPath : `/${appPath}`;
+  if (!APP_BASE) return normalized;
+  return normalized === '/' ? `${APP_BASE}/` : `${APP_BASE}${normalized}`;
+}
+
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [lang, setLangState] = useState<Language>(() => {
     const saved = safeGetStorage('la2eetoh_lang');
@@ -246,7 +266,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return saved === 'dark' ? 'dark' : 'light';
   });
   const [currentPath, setCurrentPath] = useState<string>(() =>
-    typeof window !== 'undefined' ? window.location.pathname + window.location.search : '/'
+    typeof window !== 'undefined'
+      ? stripBasePath(window.location.pathname + window.location.search)
+      : '/'
   );
 
   const [user, setUser] = useState<User | null>(null);
@@ -300,7 +322,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, [theme]);
 
   useEffect(() => {
-    const onPop = () => setCurrentPath(window.location.pathname + window.location.search);
+    const onPop = () => setCurrentPath(stripBasePath(window.location.pathname + window.location.search));
     const onOnline = () => setIsOnline(true);
     const onOffline = () => setIsOnline(false);
     const onQuota = () => setMapsQuotaExceeded(true);
@@ -321,10 +343,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   }, []);
 
   const navigate = useCallback((path: string) => {
-    if (window.location.pathname + window.location.search !== path) {
-      window.history.pushState({}, '', path);
-      setCurrentPath(path);
+    const normalized = path.startsWith('/') ? path : `/${path}`;
+    const browserTarget = withBasePath(normalized);
+    if (window.location.pathname + window.location.search !== browserTarget) {
+      window.history.pushState({}, '', browserTarget);
     }
+    setCurrentPath(normalized);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
